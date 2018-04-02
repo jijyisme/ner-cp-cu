@@ -1,65 +1,43 @@
-from loader import prepare_train_data
-import numpy as np
+"""
+Keras Model
+"""
 
-from keras.models import load_model
-from keras.datasets import imdb
 from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
-from keras.layers.embeddings import Embedding
-from keras.preprocessing import sequence
+from keras.layers import Embedding, LSTM, TimeDistributed, Dense
 from keras.layers.wrappers import Bidirectional
-from sklearn.preprocessing import LabelEncoder
-from keras.utils import np_utils
+from keras import metrics
+from NER import constant
 
-class NameEntityRecognizer(object):
-	def __init__(self,model_path=None, max_num_words=300, word_vec_length=100):
-		self.model_status = ''
-		if model_path is None:
-			self.mode = 'new_model'
-			self.initialize_model(max_num_words, word_vec_length)
-		else:
-			self.mode = 'existing_model'
-			self.model = load_model(model_path)
+from keras_contrib.layers import CRF
 
-	def initialize_model(self, max_num_words, word_vec_length):
-		self.model = Sequential()
-		lstm = LSTM(64,input_shape=(max_num_words,word_vec_length),return_sequences=True)
+class Model(object):
+    def __init__(self):
 
-		self.model.add(Bidirectional(lstm,
-		            input_shape=(max_num_words, word_vec_length)))
+        self.model_name = 'bi-lstm-crf'
+        
 
-	def add_lstm_layer(self,input_shape, bidirectional=True):
-		if(self.mode == 'existing_model'):
-			print('The loaded model cannot be changed')
-			return
-		else:
-			lstm = LSTM(64,input_shape=input_shape,return_sequences=True)
+        model = Sequential()
+        # Random embedding
 
-			self.model.add(Bidirectional(lstm,
-			            input_shape=input_shape))
+        model.add(Embedding(constant.WORD_INDEXER_SIZE, constant.EMBEDDING_SIZE, mask_zero=True))  # Random embedding
+        model.add(Bidirectional(LSTM(128, dropout=0.25, recurrent_dropout=0.25, return_sequences=True)))
+        model.add(TimeDistributed(Dense(constant.NUM_TAGS, activation='softmax')))
+        crf = CRF(constant.NUM_TAGS)
+        model.add(crf)
+        model.summary()
 
-	def add_dense_layer(self, output_length, activation='softmax'):
-		if(self.mode == 'existing_model'):
-			print('The loaded model cannot be changed')
-			return
-		else:
-			self.model.add(Dense(output_length, activation=activation))
+        model.compile('adam', loss=crf.loss_function, metrics=[crf.accuracy])
+        self.model = model
+        print(self.model_name)
 
-	def compile(self):
-		if(self.mode == 'existing_model'):
-			print('The loaded model cannot be changed')
-			return
-		else:
-			self.model.compile(optimizer='adam',
-			              loss='categorical_crossentropy',
-			              metrics=['accuracy'])
-			print(self.model.summary())
 
-	def train(self, x_train, y_train):
-		return self.model.fit(x_train, y_train, epochs=1, batch_size = 128)		
+def load_model(model_path):
+    from keras_contrib.utils import save_load_utils
+    model_architecture = Model()
+    model = model_architecture.model
+    save_load_utils.load_all_weights(model, model_path)
+    return model
 
-	def predict(self, data):
-		return self.model.predict(data)
 
-	def evaluate(self, ):
+def save_model(model_path):
+    pass
